@@ -1,0 +1,17 @@
+*.db
+*.db-shm
+*.db-wal
+
+.env
+*.log
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.py3
+
+__pycache__
+
+config
+

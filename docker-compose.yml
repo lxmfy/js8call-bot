@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  js8call-bot:
+    build: .
+    container_name: lxmfy-js8call-bot
+    volumes:
+      - ./config:/bot/config
+      - ./.reticulum:/root/.reticulum
+      - ./storage:/bot/storage
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - TZ=UTC 
