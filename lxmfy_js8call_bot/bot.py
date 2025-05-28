@@ -19,7 +19,7 @@ from .storage.sqlite_storage import SQLiteStorage
 class JS8CallBot(LXMFBot):
     """JS8Call LXMF Bot for message forwarding between JS8Call and LXMF networks."""
 
-    def __init__(self, name="LXMFy-JS8Call--Bot"):
+    def __init__(self, name="JS8Call-Bot-Test"):
         """Initialize JS8Call LXMF Bot.
 
         Args:
@@ -34,29 +34,32 @@ class JS8CallBot(LXMFBot):
         self.blocked_words = []
 
         # Load config first
-        self.config = configparser.ConfigParser()
-        self.config.read("config.ini")
+        self.cfg = configparser.ConfigParser()
+        self.cfg.read("config.ini")
 
         # Initialize LXMFBot with config values
         super().__init__(
             name=name,
-            announce=self.config.getint("bot", "announce_interval", fallback=360),
+            announce=self.cfg.getint("bot", "announce_interval", fallback=360),
             announce_immediately=True,
-            admins=self.config.get("bot", "allowed_users", fallback="")
+            admins=self.cfg.get("bot", "allowed_users", fallback="")
             .strip()
             .split(","),
             hot_reloading=True,
             rate_limit=5,
-            cooldown=60,
+            cooldown=10,
             max_warnings=3,
             warning_timeout=300,
             command_prefix="/",
         )
 
-        # Setup SQLite storage after parent initialization
+        # Initialize SQLite backend for messages and optionally user storage
         self.db = SQLiteStorage(
-            self.config.get("js8call", "db_file", fallback="js8call.db")
+            self.cfg.get("js8call", "db_file", fallback="js8call.db")
         )
+        # If configured, persist users in SQLite instead of default JSONStorage
+        if self.cfg.get("bot", "store_users_in_db", fallback="no").lower() in ("yes", "true", "1"):
+            self.storage = self.db
 
         self.setup_logging()
         self.setup_js8call()
@@ -82,15 +85,15 @@ class JS8CallBot(LXMFBot):
     def setup_js8call(self):
         """Initialize JS8Call connection settings."""
         self.js8call_server = (
-            self.config.get("js8call", "host", fallback="localhost"),
-            self.config.getint("js8call", "port", fallback=2442),
+            self.cfg.get("js8call", "host", fallback="localhost"),
+            self.cfg.getint("js8call", "port", fallback=2442),
         )
         self.js8call_socket = None
         self.js8call_connected = False
 
         # JS8Call specific settings
-        self.js8groups = self.config.get("js8call", "js8groups", fallback="").split(",")
-        self.js8urgent = self.config.get("js8call", "js8urgent", fallback="").split(",")
+        self.js8groups = self.cfg.get("js8call", "js8groups", fallback="").split(",")
+        self.js8urgent = self.cfg.get("js8call", "js8urgent", fallback="").split(",")
         self.js8groups = [group.strip() for group in self.js8groups]
         self.js8urgent = [group.strip() for group in self.js8urgent]
 
@@ -138,7 +141,7 @@ class JS8CallBot(LXMFBot):
         if user not in self.distro_list:
             self.distro_list.add(user)
             # Add default groups if configured
-            default_groups = self.config.get(
+            default_groups = self.cfg.get(
                 "bot", "default_groups", fallback=""
             ).split(",")
             default_groups = [g.strip() for g in default_groups if g.strip()]
@@ -149,7 +152,7 @@ class JS8CallBot(LXMFBot):
             self.save_state_to_storage()
 
             # Send welcome message
-            welcome_msg = f"You have been added to the JS8Call message group"
+            welcome_msg = "You have been added to the JS8Call message group"
             if default_groups:
                 welcome_msg += (
                     f" and the following default groups: {', '.join(default_groups)}"
@@ -285,21 +288,39 @@ class JS8CallBot(LXMFBot):
         except KeyboardInterrupt:
             self.logger.info("Shutting down JS8Call LXMF bot...")
         finally:
+            # Close JS8Call socket if open
             if self.js8call_socket:
-                self.js8call_socket.close()
-            self.storage.cleanup()
+                try:
+                    self.js8call_socket.close()
+                except Exception:
+                    self.logger.warning("Error closing JS8Call socket during cleanup")
+            # Cleanup base storage if supported
+            try:
+                if hasattr(self.storage, "cleanup"):
+                    self.storage.cleanup()
+            except Exception as e:
+                self.logger.warning(f"Error cleaning up storage: {e}")
+            # Cleanup SQLite storage if present
+            try:
+                if hasattr(self.db, "cleanup"):
+                    self.db.cleanup()
+            except Exception as e:
+                self.logger.warning(f"Error cleaning up SQLite storage: {e}")
+            # Shutdown thread pool
+            try:
+                self.thread_pool.shutdown(wait=False)
+            except Exception as e:
+                self.logger.warning(f"Error shutting down thread pool: {e}")
 
     def js8call_loop(self):
         while True:
-            try:
-                if not self.js8call_connected:
-                    self.connect_js8call()
-                if self.js8call_connected:
-                    self.process_js8call_messages()
-                time.sleep(1)
-            except Exception as e:
-                self.logger.error(f"JS8Call loop error: {e}")
-                time.sleep(5)
+            # Attempt connection if not connected
+            if not self.js8call_connected:
+                self.connect_js8call()
+            # Process messages if connected
+            elif self.js8call_connected:
+                self.process_js8call_messages()
+            time.sleep(1)
 
     def connect_js8call(self):
         """Connect to JS8Call instance"""
@@ -410,32 +431,39 @@ class JS8CallBot(LXMFBot):
 
     def _send_to_users(self, message: str, group: str = None):
         """Send a message to all users or group subscribers"""
-        futures = []
-        for user in self.distro_list:
+        futures = [
+            self.thread_pool.submit(self.send, user, message)
+            for user in self.distro_list
             if group is None or (
                 group in self.user_groups[user] and group not in self.muted_users[user]
-            ):
-                futures.append(self.thread_pool.submit(self.send, user, message))
+            )
+        ]
         concurrent.futures.wait(futures)
 
     def show_help(self):
         """Return help message with available commands"""
-        return (
-            "Available commands:\n"
-            "/add - Add yourself to the JS8Call message group\n"
-            "/remove - Remove yourself from the JS8Call message group\n"
-            "/groups - Show available groups and your subscriptions\n"
-            "/join <group1> <group2> ... - Join one or more groups\n"
-            "/leave <group> - Leave a specific group\n"
-            "/mute <group1> <group2> ... or ALL - Mute one or more groups or all groups\n"
-            "/unmute <group1> <group2> ... or ALL - Unmute one or more groups or all groups\n"
-            "/help - Show this help message\n"
-            "/showlog <number> - Show the last <number> messages (max 50)\n"
-            "/stats - Show current stats\n"
-            "/stats <day|month> - Show stats for the specified period\n"
-            "/info - Show bot information\n"
-            "/analytics [day|week] - Show usage statistics"
-        )
+        cmds = [
+            "/add - Add yourself to the JS8Call message group",
+            "/remove - Remove yourself from the JS8Call message group",
+            "/groups - Show available groups and your subscriptions",
+            "/join <group1> <group2> ... - Join one or more groups",
+            "/leave <group> - Leave a specific group",
+            "/mute <group1> <group2> ... or ALL - Mute one or more groups or all groups",
+            "/unmute <group1> <group2> ... or ALL - Unmute one or more groups or all groups",
+            "/help - Show this help message",
+            "/showlog <number> - Show the last <number> messages (max 50)",
+            "/stats - Show current stats",
+            "/stats <day|month> - Show stats for the specified period",
+            "/info - Show bot information",
+            "/analytics [day|week] - Show usage statistics",
+        ]
+        help_msg = "Available commands:\n" + "\n".join(cmds)
+        # Append configured JS8Call and urgent groups
+        if self.js8groups:
+            help_msg += "\n\nConfigured JS8Call groups:\n" + ", ".join(self.js8groups)
+        if self.js8urgent:
+            help_msg += "\n\nConfigured URGENT groups:\n" + ", ".join(self.js8urgent)
+        return help_msg
 
     def show_groups(self, user):
         """Show available groups and user's subscriptions"""
@@ -516,6 +544,9 @@ class JS8CallBot(LXMFBot):
         return output
 
 
-if __name__ == "__main__":
+def main():
     bot = JS8CallBot()
     bot.run()
+
+if __name__ == "__main__":
+    main()

@@ -3,7 +3,6 @@
 import sqlite3
 import threading
 import logging
-from datetime import datetime
 from typing import Any
 
 from lxmfy.storage import StorageBackend
