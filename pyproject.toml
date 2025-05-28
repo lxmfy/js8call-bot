@@ -10,12 +10,13 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.13"
-lxmfy = "^0.3.2"
+lxmfy = "^0.7.3"
+
+[tool.poetry.scripts]
+lxmfy-js8call-bot = "lxmfy_js8call_bot.bot:main"
 
 [tool.poetry.group.dev.dependencies]
-pylint = "^3.3.3"
-bandit = "^1.8.0"
-black = "^24.10.0"
+ruff = "^0.11.11"
 
 [build-system]
 requires = ["poetry-core"]

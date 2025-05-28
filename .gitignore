@@ -13,5 +13,9 @@
 
 __pycache__
 
-config
+config.ini
+config/
 
+data/
+
+.ruff_cache/
