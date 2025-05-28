@@ -9,7 +9,7 @@ LXMF JS8Call bot that uses the [LXMFy bot framework](https://lxmfy.github.io/LXM
 
 ## To-Do
 
-- [ ] Supports multiple JS8Call servers.
+- [ ] Supports multiple JS8Call APIs.
 - [ ] Bot LXMF icons
 - [ ] Guide
 
