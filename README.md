@@ -11,17 +11,23 @@ LXMF JS8Call bot that uses the [LXMFy bot framework](https://lxmfy.github.io/LXM
 
 - [ ] Supports multiple JS8Call APIs.
 - [ ] Bot LXMF icons
-- [ ] Guide
 
 ## Installation
+
+Make sure JS8Call is running and API enabled.
+
+```
+pipx install lxmfy-js8call-bot
+lxmfy-js8call-bot
+```
+
+### Docker/Podman:
 
 Create directories for the bot
 
 ```bash
 mkdir -p yourbotname/config yourbotname/storage yourbotname/.reticulum
 ```
-
-**Docker/Podman:**
 
 ```bash
 docker run -d \
@@ -36,9 +42,16 @@ docker run -d \
 
 Remove `--network host` for no auto-interface and want to keep things isolated.
 
-**Manual:**
+### Running with Poetry:
 
 ```bash
 poetry install
 poetry run lxmfy-js8call-bot
+```
+
+### Building:
+
+```bash
+poetry install
+poetry build
 ```
