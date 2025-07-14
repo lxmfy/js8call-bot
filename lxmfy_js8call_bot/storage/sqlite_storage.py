@@ -1,8 +1,10 @@
 """SQLite storage backend for the JS8Call LXMF bot."""
 
+import ast
+import json
+import logging
 import sqlite3
 import threading
-import logging
 from typing import Any
 
 from lxmfy.storage import StorageBackend
@@ -95,7 +97,17 @@ class SQLiteStorage(StorageBackend):
             try:
                 cursor.execute("SELECT value FROM storage WHERE key = ?", (key,))
                 result = cursor.fetchone()
-                return result[0] if result else default
+                if result:
+                    try:
+                        return json.loads(result[0])
+                    except json.JSONDecodeError:
+                        self.logger.warning("Could not decode JSON for key %s, attempting literal_eval.", key)
+                        try:
+                            return ast.literal_eval(result[0])
+                        except (ValueError, SyntaxError):
+                            self.logger.error("Could not literal_eval for key %s, returning raw string.", key)
+                            return result[0]
+                return default
             except Exception as e:
                 self.logger.error("Error getting key %s: %s", key, e)
                 return default
@@ -114,7 +126,7 @@ class SQLiteStorage(StorageBackend):
             try:
                 cursor.execute(
                     "INSERT OR REPLACE INTO storage (key, value) VALUES (?, ?)",
-                    (key, str(value)),
+                    (key, json.dumps(value)),
                 )
                 self.db_conn.commit()
             except Exception as e:

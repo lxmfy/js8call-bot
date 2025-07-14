@@ -1,7 +1,7 @@
 """JS8Call LXMF Bot implementation for message forwarding between JS8Call and LXMF networks."""
 
-import configparser
 import concurrent.futures
+import configparser
 import json
 import logging
 import threading
@@ -9,7 +9,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
-from socket import socket, AF_INET, SOCK_STREAM
+from socket import AF_INET, SOCK_STREAM, socket
 
 from lxmfy import LXMFBot
 
@@ -51,6 +51,7 @@ class JS8CallBot(LXMFBot):
             max_warnings=3,
             warning_timeout=300,
             command_prefix="/",
+            permissions_enabled=True, # Enable permission system
         )
 
         # Initialize SQLite backend for messages and optionally user storage
@@ -216,14 +217,63 @@ class JS8CallBot(LXMFBot):
         else:
             self.send(user, f"You are not in the group: {group}")
 
+    def mute_user_groups(self, user, groups):
+        """Mute a user from specified groups"""
+        if user in self.distro_list:
+            if "ALL" in [g.upper() for g in groups]:
+                # Mute all available groups
+                all_groups = set(self.js8groups + self.js8urgent)
+                self.muted_users[user].update(all_groups)
+                self.send(user, "You have muted all available groups.")
+                self.logger.info(f"Muted all groups for {user}")
+            else:
+                # Mute specific groups
+                muted = []
+                for group in groups:
+                    if group in self.js8groups or group in self.js8urgent:
+                        self.muted_users[user].add(group)
+                        muted.append(group)
+                if muted:
+                    self.send(user, f"You have muted the following groups: {', '.join(muted)}")
+                    self.logger.info(f"Muted {', '.join(muted)} for {user}")
+                else:
+                    self.send(user, "No valid groups to mute.")
+            self.save_state_to_storage()
+        else:
+            self.send(user, "You need to join the JS8Call message group first. Use /add command.")
+
+    def unmute_user_groups(self, user, groups):
+        """Unmute a user from specified groups"""
+        if user in self.distro_list:
+            if "ALL" in [g.upper() for g in groups]:
+                # Unmute all groups
+                self.muted_users[user].clear()
+                self.send(user, "You have unmuted all groups.")
+                self.logger.info(f"Unmuted all groups for {user}")
+            else:
+                # Unmute specific groups
+                unmuted = []
+                for group in groups:
+                    if group in self.muted_users[user]:
+                        self.muted_users[user].remove(group)
+                        unmuted.append(group)
+                if unmuted:
+                    self.send(user, f"You have unmuted the following groups: {', '.join(unmuted)}")
+                    self.logger.info(f"Unmuted {', '.join(unmuted)} for {user}")
+                else:
+                    self.send(user, "No valid groups to unmute or they were not muted.")
+            self.save_state_to_storage()
+        else:
+            self.send(user, "You need to join the JS8Call message group first. Use /add command.")
+
     def register_commands(self):
         """Register bot command handlers."""
 
-        @self.command(description="Add yourself to the JS8Call message group")
+        @self.command(description="Add yourself to the JS8Call message group", admin_only=True)
         def add(ctx):
             self.add_to_distro_list(ctx.sender)
 
-        @self.command(description="Remove yourself from the JS8Call message group")
+        @self.command(description="Remove yourself from the JS8Call message group", admin_only=True)
         def remove(ctx):
             self.remove_from_distro_list(ctx.sender)
 
@@ -246,11 +296,25 @@ class JS8CallBot(LXMFBot):
             else:
                 ctx.reply("Usage: /leave <group>")
 
+        @self.command(description="Mute one or more groups or ALL", threaded=True)
+        def mute(ctx):
+            if ctx.args:
+                self.mute_user_groups(ctx.sender, ctx.args)
+            else:
+                ctx.reply("Usage: /mute <group1> <group2> ... or ALL")
+
+        @self.command(description="Unmute one or more groups or ALL", threaded=True)
+        def unmute(ctx):
+            if ctx.args:
+                self.unmute_user_groups(ctx.sender, ctx.args)
+            else:
+                ctx.reply("Usage: /unmute <group1> <group2> ... or ALL")
+
         @self.command(description="Show bot help")
         def help(ctx):
             ctx.reply(self.show_help())
 
-        @self.command(description="Show message log")
+        @self.command(description="Show message log", threaded=True)
         def showlog(ctx):
             try:
                 num_messages = int(ctx.args[0]) if ctx.args else 10
@@ -259,7 +323,7 @@ class JS8CallBot(LXMFBot):
             except (IndexError, ValueError):
                 ctx.reply("Usage: /showlog <number>")
 
-        @self.command(description="Show bot statistics")
+        @self.command(description="Show bot statistics", threaded=True)
         def stats(ctx):
             period = (
                 ctx.args[0] if ctx.args and ctx.args[0] in ["day", "month"] else None
@@ -271,6 +335,14 @@ class JS8CallBot(LXMFBot):
         def info(ctx):
             info_output = self.show_info()
             ctx.reply(info_output)
+
+        @self.command(description="Show usage statistics", threaded=True)
+        def analytics(ctx):
+            period = (
+                ctx.args[0] if ctx.args and ctx.args[0] in ["day", "week"] else None
+            )
+            analytics_output = self.show_analytics(period)
+            ctx.reply(analytics_output)
 
     def run(self, *args, **kwargs):
         """Run the bot main loop."""
@@ -443,8 +515,8 @@ class JS8CallBot(LXMFBot):
     def show_help(self):
         """Return help message with available commands"""
         cmds = [
-            "/add - Add yourself to the JS8Call message group",
-            "/remove - Remove yourself from the JS8Call message group",
+            "/add (admin only) - Add yourself to the JS8Call message group",
+            "/remove (admin only) - Remove yourself from the JS8Call message group",
             "/groups - Show available groups and your subscriptions",
             "/join <group1> <group2> ... - Join one or more groups",
             "/leave <group> - Leave a specific group",
@@ -541,6 +613,47 @@ class JS8CallBot(LXMFBot):
             else:
                 output += "No data for this month\n"
 
+        return output
+
+    def show_analytics(self, period=None):
+        """Show usage statistics for the specified period"""
+        output = "Usage Statistics:\n"
+        if period == "day":
+            date = datetime.now().strftime("%Y-%m-%d")
+            messages_count = self.execute_db_query(
+                "SELECT COUNT(*) FROM messages WHERE DATE(timestamp) = ?", (date,)
+            )
+            groups_count = self.execute_db_query(
+                "SELECT COUNT(*) FROM groups WHERE DATE(timestamp) = ?", (date,)
+            )
+            urgent_count = self.execute_db_query(
+                "SELECT COUNT(*) FROM urgent WHERE DATE(timestamp) = ?", (date,)
+            )
+            output += f"Messages today: {messages_count[0][0] if messages_count else 0}\n"
+            output += f"Group messages today: {groups_count[0][0] if groups_count else 0}\n"
+            output += f"Urgent messages today: {urgent_count[0][0] if urgent_count else 0}\n"
+        elif period == "week":
+            start_of_week = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%Y-%m-%d")
+            end_of_week = (datetime.now() + timedelta(days=(6 - datetime.now().weekday()))).strftime("%Y-%m-%d")
+            messages_count = self.execute_db_query(
+                "SELECT COUNT(*) FROM messages WHERE DATE(timestamp) BETWEEN ? AND ?", (start_of_week, end_of_week)
+            )
+            groups_count = self.execute_db_query(
+                "SELECT COUNT(*) FROM groups WHERE DATE(timestamp) BETWEEN ? AND ?", (start_of_week, end_of_week)
+            )
+            urgent_count = self.execute_db_query(
+                "SELECT COUNT(*) FROM urgent WHERE DATE(timestamp) BETWEEN ? AND ?", (start_of_week, end_of_week)
+            )
+            output += f"Messages this week: {messages_count[0][0] if messages_count else 0}\n"
+            output += f"Group messages this week: {groups_count[0][0] if groups_count else 0}\n"
+            output += f"Urgent messages this week: {urgent_count[0][0] if urgent_count else 0}\n"
+        else:
+            total_messages = self.execute_db_query("SELECT COUNT(*) FROM messages")
+            total_groups = self.execute_db_query("SELECT COUNT(*) FROM groups")
+            total_urgent = self.execute_db_query("SELECT COUNT(*) FROM urgent")
+            output += f"Total direct messages: {total_messages[0][0] if total_messages else 0}\n"
+            output += f"Total group messages: {total_groups[0][0] if total_groups else 0}\n"
+            output += f"Total urgent messages: {total_urgent[0][0] if total_urgent else 0}\n"
         return output
 
 
