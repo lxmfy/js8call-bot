@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lxmfy-js8call-bot"
-version = "0.2.1"
+version = "0.3.0"
 description = ""
 authors = ["LXMFy"]
 readme = "README.md"
@@ -10,7 +10,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.13"
-lxmfy = "^0.7.3"
+lxmfy = "^0.7.7"
 
 [tool.poetry.scripts]
 lxmfy-js8call-bot = "lxmfy_js8call_bot.bot:main"
