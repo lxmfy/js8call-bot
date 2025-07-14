@@ -1,5 +1,9 @@
 # LXMFy JS8Call Bot
 
+[![DeepSource](https://app.deepsource.com/gh/lxmfy/js8call-bot.svg/?label=active+issues&show_trend=true&token=wJqFJxNQ5HrruY2vjJ4q8IEM)](https://app.deepsource.com/gh/lxmfy/js8call-bot/)
+[![Build Test](https://github.com/lxmfy/js8call-bot/actions/workflows/build-test.yml/badge.svg)](https://github.com/lxmfy/js8call-bot/actions/workflows/build-test.yml)
+[![Docker Build and Publish](https://github.com/lxmfy/js8call-bot/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/lxmfy/js8call-bot/actions/workflows/docker-publish.yml)
+
 LXMF JS8Call bot that uses the [LXMFy bot framework](https://lxmfy.github.io/LXMFy/). Relays messages from JS8Call over LXMF.
 
 ## Features
