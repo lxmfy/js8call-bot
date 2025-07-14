@@ -135,7 +135,7 @@ class JS8CallBot(LXMFBot):
             self.storage.set("users", users_data)
             self.logger.debug("Saved state to storage")
         except Exception as e:
-            self.logger.error(f"Error saving state to storage: {e}")
+            self.logger.error("Error saving state to storage: %s", e)
 
     def add_to_distro_list(self, user):
         """Add a user to the distribution list"""
@@ -161,7 +161,7 @@ class JS8CallBot(LXMFBot):
             welcome_msg += ". You will receive messages when they are available."
             self.send(user, welcome_msg)
 
-            self.logger.info(f"Added {user} to distribution list")
+            self.logger.info("Added %s to distribution list", user)
         else:
             self.send(user, "You are already in the JS8Call message group.")
 
@@ -179,7 +179,7 @@ class JS8CallBot(LXMFBot):
                 user,
                 "You have been removed from the JS8Call message group and all groups.",
             )
-            self.logger.info(f"Removed {user} from distribution list")
+            self.logger.info("Removed %s from distribution list", user)
         else:
             self.send(user, "You are not in the JS8Call message group.")
 
@@ -197,7 +197,7 @@ class JS8CallBot(LXMFBot):
                 user,
                 f"You have been added to the following groups: {', '.join(groups)}",
             )
-            self.logger.info(f"Added {user} to groups: {', '.join(groups)}")
+            self.logger.info("Added %s to groups: %s", user, ", ".join(groups))
         else:
             self.send(
                 user,
@@ -213,7 +213,7 @@ class JS8CallBot(LXMFBot):
             self.save_state_to_storage()
 
             self.send(user, f"You have been removed from the group: {group}")
-            self.logger.info(f"Removed {user} from group: {group}")
+            self.logger.info("Removed %s from group: %s", user, group)
         else:
             self.send(user, f"You are not in the group: {group}")
 
@@ -225,7 +225,7 @@ class JS8CallBot(LXMFBot):
                 all_groups = set(self.js8groups + self.js8urgent)
                 self.muted_users[user].update(all_groups)
                 self.send(user, "You have muted all available groups.")
-                self.logger.info(f"Muted all groups for {user}")
+                self.logger.info("Muted all groups for %s", user)
             else:
                 # Mute specific groups
                 muted = []
@@ -235,7 +235,7 @@ class JS8CallBot(LXMFBot):
                         muted.append(group)
                 if muted:
                     self.send(user, f"You have muted the following groups: {', '.join(muted)}")
-                    self.logger.info(f"Muted {', '.join(muted)} for {user}")
+                    self.logger.info("Muted %s for %s", ", ".join(muted), user)
                 else:
                     self.send(user, "No valid groups to mute.")
             self.save_state_to_storage()
@@ -249,7 +249,7 @@ class JS8CallBot(LXMFBot):
                 # Unmute all groups
                 self.muted_users[user].clear()
                 self.send(user, "You have unmuted all groups.")
-                self.logger.info(f"Unmuted all groups for {user}")
+                self.logger.info("Unmuted all groups for %s", user)
             else:
                 # Unmute specific groups
                 unmuted = []
@@ -259,7 +259,7 @@ class JS8CallBot(LXMFBot):
                         unmuted.append(group)
                 if unmuted:
                     self.send(user, f"You have unmuted the following groups: {', '.join(unmuted)}")
-                    self.logger.info(f"Unmuted {', '.join(unmuted)} for {user}")
+                    self.logger.info("Unmuted %s for %s", ", ".join(unmuted), user)
                 else:
                     self.send(user, "No valid groups to unmute or they were not muted.")
             self.save_state_to_storage()
@@ -371,18 +371,18 @@ class JS8CallBot(LXMFBot):
                 if hasattr(self.storage, "cleanup"):
                     self.storage.cleanup()
             except Exception as e:
-                self.logger.warning(f"Error cleaning up storage: {e}")
+                self.logger.warning("Error cleaning up storage: %s", e)
             # Cleanup SQLite storage if present
             try:
                 if hasattr(self.db, "cleanup"):
                     self.db.cleanup()
             except Exception as e:
-                self.logger.warning(f"Error cleaning up SQLite storage: {e}")
+                self.logger.warning("Error cleaning up SQLite storage: %s", e)
             # Shutdown thread pool
             try:
                 self.thread_pool.shutdown(wait=False)
             except Exception as e:
-                self.logger.warning(f"Error shutting down thread pool: {e}")
+                self.logger.warning("Error shutting down thread pool: %s", e)
 
     def js8call_loop(self):
         while True:
@@ -396,14 +396,14 @@ class JS8CallBot(LXMFBot):
 
     def connect_js8call(self):
         """Connect to JS8Call instance"""
-        self.logger.info(f"Connecting to JS8Call on {self.js8call_server}")
+        self.logger.info("Connecting to JS8Call on %s", self.js8call_server)
         self.js8call_socket = socket(AF_INET, SOCK_STREAM)
         try:
             self.js8call_socket.connect(self.js8call_server)
             self.js8call_connected = True
             self.logger.info("Connected to JS8Call")
         except Exception as e:
-            self.logger.error(f"Failed to connect to JS8Call: {e}")
+            self.logger.error("Failed to connect to JS8Call: %s", e)
             self.js8call_socket = None
             self.js8call_connected = False
 
@@ -429,11 +429,11 @@ class JS8CallBot(LXMFBot):
                     msg_data = json.loads(message)
                     self.handle_js8call_message(msg_data)
                 except json.JSONDecodeError as e:
-                    self.logger.error(f"Failed to parse JS8Call message: {e}")
+                    self.logger.error("Failed to parse JS8Call message: %s", e)
                     continue
 
         except Exception as e:
-            self.logger.error(f"Error processing JS8Call messages: {e}")
+            self.logger.error("Error processing JS8Call messages: %s", e)
             self.js8call_connected = False
 
     def handle_js8call_message(self, data):

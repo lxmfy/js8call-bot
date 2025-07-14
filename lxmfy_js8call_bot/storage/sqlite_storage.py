@@ -39,7 +39,7 @@ class SQLiteStorage(StorageBackend):
                     key TEXT PRIMARY KEY,
                     value TEXT
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     sender TEXT,
@@ -48,7 +48,7 @@ class SQLiteStorage(StorageBackend):
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     processed INTEGER DEFAULT 0
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS groups (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     sender TEXT,
@@ -57,7 +57,7 @@ class SQLiteStorage(StorageBackend):
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     processed INTEGER DEFAULT 0
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS urgent (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     sender TEXT,
@@ -66,14 +66,14 @@ class SQLiteStorage(StorageBackend):
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     processed INTEGER DEFAULT 0
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_hash TEXT UNIQUE,
                     groups TEXT,
                     muted_groups TEXT
                 );
-                
+
                 CREATE TABLE IF NOT EXISTS stats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     date TEXT UNIQUE,
