@@ -16,7 +16,7 @@ from lxmfy import LXMFBot
 from .storage.sqlite_storage import SQLiteStorage
 
 
-class JS8CallBot(LXMFBot):
+class JS8CallBot:
     """JS8Call LXMF Bot for message forwarding between JS8Call and LXMF networks."""
 
     def __init__(self, name="JS8Call-Bot-Test"):
@@ -24,43 +24,47 @@ class JS8CallBot(LXMFBot):
 
         Args:
             name: Bot name identifier
+
         """
         # Initialize additional attributes
         self.js8call_socket = None
         self.js8call_connected = False
         self.bot_location = None
         self.node_operator = None
-        self.thread_pool = concurrent.futures.ThreadPoolExecutor()
         self.blocked_words = []
 
         # Load config first
         self.cfg = configparser.ConfigParser()
         self.cfg.read("config.ini")
 
-        # Initialize LXMFBot with config values
-        super().__init__(
-            name=name,
-            announce=self.cfg.getint("bot", "announce_interval", fallback=360),
-            announce_immediately=True,
-            admins=self.cfg.get("bot", "allowed_users", fallback="")
-            .strip()
-            .split(","),
-            hot_reloading=True,
-            rate_limit=5,
-            cooldown=10,
-            max_warnings=3,
-            warning_timeout=300,
-            command_prefix="/",
-            permissions_enabled=True, # Enable permission system
-        )
+        # Prepare configuration for new BotConfig system
+        config_kwargs = {
+            "name": name,
+            "announce": self.cfg.getint("bot", "announce_interval", fallback=360),
+            "announce_immediately": True,
+            "admins": set(self.cfg.get("bot", "allowed_users", fallback="")
+                         .strip().split(",")),
+            "hot_reloading": True,
+            "rate_limit": 5,
+            "cooldown": 10,
+            "max_warnings": 3,
+            "warning_timeout": 300,
+            "command_prefix": "/",
+            "permissions_enabled": True,  # Enable permission system
+            "signature_verification_enabled": self.cfg.getboolean("bot", "signature_verification_enabled", fallback=False),
+            "require_message_signatures": self.cfg.getboolean("bot", "require_message_signatures", fallback=False),
+        }
+
+        # Initialize LXMFBot with new config system
+        self.bot = LXMFBot(**config_kwargs)
 
         # Initialize SQLite backend for messages and optionally user storage
         self.db = SQLiteStorage(
-            self.cfg.get("js8call", "db_file", fallback="js8call.db")
+            self.cfg.get("js8call", "db_file", fallback="js8call.db"),
         )
         # If configured, persist users in SQLite instead of default JSONStorage
         if self.cfg.get("bot", "store_users_in_db", fallback="no").lower() in ("yes", "true", "1"):
-            self.storage = self.db
+            self.bot.storage = self.db
 
         self.setup_logging()
         self.setup_js8call()
@@ -73,7 +77,7 @@ class JS8CallBot(LXMFBot):
 
         handlers = [
             RotatingFileHandler(
-                "js8call_lxmf_bot.log", maxBytes=1000000, backupCount=5
+                "js8call_lxmf_bot.log", maxBytes=1000000, backupCount=5,
             ),
             logging.StreamHandler(),
         ]
@@ -113,7 +117,7 @@ class JS8CallBot(LXMFBot):
         """Load users and their settings from storage"""
         try:
             # Load distribution list
-            users_data = self.storage.get("users", {})
+            users_data = self.bot.storage.get("users", {})
             if users_data:
                 for user_hash, user_data in users_data.items():
                     self.distro_list.add(user_hash)
@@ -132,7 +136,7 @@ class JS8CallBot(LXMFBot):
                     "groups": list(self.user_groups[user]),
                     "muted_groups": list(self.muted_users[user]),
                 }
-            self.storage.set("users", users_data)
+            self.bot.storage.set("users", users_data)
             self.logger.debug("Saved state to storage")
         except Exception as e:
             self.logger.error("Error saving state to storage: %s", e)
@@ -143,7 +147,7 @@ class JS8CallBot(LXMFBot):
             self.distro_list.add(user)
             # Add default groups if configured
             default_groups = self.cfg.get(
-                "bot", "default_groups", fallback=""
+                "bot", "default_groups", fallback="",
             ).split(",")
             default_groups = [g.strip() for g in default_groups if g.strip()]
             for group in default_groups:
@@ -159,11 +163,11 @@ class JS8CallBot(LXMFBot):
                     f" and the following default groups: {', '.join(default_groups)}"
                 )
             welcome_msg += ". You will receive messages when they are available."
-            self.send(user, welcome_msg)
+            self.bot.send(user, welcome_msg)
 
             self.logger.info("Added %s to distribution list", user)
         else:
-            self.send(user, "You are already in the JS8Call message group.")
+            self.bot.send(user, "You are already in the JS8Call message group.")
 
     def remove_from_distro_list(self, user):
         """Remove a user from the distribution list"""
@@ -175,13 +179,13 @@ class JS8CallBot(LXMFBot):
             # Save updated state
             self.save_state_to_storage()
 
-            self.send(
+            self.bot.send(
                 user,
                 "You have been removed from the JS8Call message group and all groups.",
             )
             self.logger.info("Removed %s from distribution list", user)
         else:
-            self.send(user, "You are not in the JS8Call message group.")
+            self.bot.send(user, "You are not in the JS8Call message group.")
 
     def add_user_to_groups(self, user, groups):
         """Add a user to specified groups"""
@@ -193,13 +197,13 @@ class JS8CallBot(LXMFBot):
             # Save updated state
             self.save_state_to_storage()
 
-            self.send(
+            self.bot.send(
                 user,
                 f"You have been added to the following groups: {', '.join(groups)}",
             )
             self.logger.info("Added %s to groups: %s", user, ", ".join(groups))
         else:
-            self.send(
+            self.bot.send(
                 user,
                 "You need to join the JS8Call message group first. Use /add command.",
             )
@@ -212,10 +216,10 @@ class JS8CallBot(LXMFBot):
             # Save updated state
             self.save_state_to_storage()
 
-            self.send(user, f"You have been removed from the group: {group}")
+            self.bot.send(user, f"You have been removed from the group: {group}")
             self.logger.info("Removed %s from group: %s", user, group)
         else:
-            self.send(user, f"You are not in the group: {group}")
+            self.bot.send(user, f"You are not in the group: {group}")
 
     def mute_user_groups(self, user, groups):
         """Mute a user from specified groups"""
@@ -224,7 +228,7 @@ class JS8CallBot(LXMFBot):
                 # Mute all available groups
                 all_groups = set(self.js8groups + self.js8urgent)
                 self.muted_users[user].update(all_groups)
-                self.send(user, "You have muted all available groups.")
+                self.bot.send(user, "You have muted all available groups.")
                 self.logger.info("Muted all groups for %s", user)
             else:
                 # Mute specific groups
@@ -234,13 +238,13 @@ class JS8CallBot(LXMFBot):
                         self.muted_users[user].add(group)
                         muted.append(group)
                 if muted:
-                    self.send(user, f"You have muted the following groups: {', '.join(muted)}")
+                    self.bot.send(user, f"You have muted the following groups: {', '.join(muted)}")
                     self.logger.info("Muted %s for %s", ", ".join(muted), user)
                 else:
-                    self.send(user, "No valid groups to mute.")
+                    self.bot.send(user, "No valid groups to mute.")
             self.save_state_to_storage()
         else:
-            self.send(user, "You need to join the JS8Call message group first. Use /add command.")
+            self.bot.send(user, "You need to join the JS8Call message group first. Use /add command.")
 
     def unmute_user_groups(self, user, groups):
         """Unmute a user from specified groups"""
@@ -248,7 +252,7 @@ class JS8CallBot(LXMFBot):
             if "ALL" in [g.upper() for g in groups]:
                 # Unmute all groups
                 self.muted_users[user].clear()
-                self.send(user, "You have unmuted all groups.")
+                self.bot.send(user, "You have unmuted all groups.")
                 self.logger.info("Unmuted all groups for %s", user)
             else:
                 # Unmute specific groups
@@ -258,63 +262,59 @@ class JS8CallBot(LXMFBot):
                         self.muted_users[user].remove(group)
                         unmuted.append(group)
                 if unmuted:
-                    self.send(user, f"You have unmuted the following groups: {', '.join(unmuted)}")
+                    self.bot.send(user, f"You have unmuted the following groups: {', '.join(unmuted)}")
                     self.logger.info("Unmuted %s for %s", ", ".join(unmuted), user)
                 else:
-                    self.send(user, "No valid groups to unmute or they were not muted.")
+                    self.bot.send(user, "No valid groups to unmute or they were not muted.")
             self.save_state_to_storage()
         else:
-            self.send(user, "You need to join the JS8Call message group first. Use /add command.")
+            self.bot.send(user, "You need to join the JS8Call message group first. Use /add command.")
 
     def register_commands(self):
         """Register bot command handlers."""
 
-        @self.command(description="Add yourself to the JS8Call message group", admin_only=True)
+        @self.bot.command(description="Add yourself to the JS8Call message group", admin_only=True)
         def add(ctx):
             self.add_to_distro_list(ctx.sender)
 
-        @self.command(description="Remove yourself from the JS8Call message group", admin_only=True)
+        @self.bot.command(description="Remove yourself from the JS8Call message group", admin_only=True)
         def remove(ctx):
             self.remove_from_distro_list(ctx.sender)
 
-        @self.command(description="Show available groups and your subscriptions")
+        @self.bot.command(description="Show available groups and your subscriptions")
         def groups(ctx):
             groups_output = self.show_groups(ctx.sender)
             ctx.reply(groups_output)
 
-        @self.command(description="Join one or more groups")
+        @self.bot.command(description="Join one or more groups")
         def join(ctx):
             if ctx.args:
                 self.add_user_to_groups(ctx.sender, ctx.args)
             else:
                 ctx.reply("Usage: /join <group1> <group2> ...")
 
-        @self.command(description="Leave a specific group")
+        @self.bot.command(description="Leave a specific group")
         def leave(ctx):
             if ctx.args:
                 self.remove_user_from_group(ctx.sender, ctx.args[0])
             else:
                 ctx.reply("Usage: /leave <group>")
 
-        @self.command(description="Mute one or more groups or ALL", threaded=True)
+        @self.bot.command(description="Mute one or more groups or ALL", threaded=True)
         def mute(ctx):
             if ctx.args:
                 self.mute_user_groups(ctx.sender, ctx.args)
             else:
                 ctx.reply("Usage: /mute <group1> <group2> ... or ALL")
 
-        @self.command(description="Unmute one or more groups or ALL", threaded=True)
+        @self.bot.command(description="Unmute one or more groups or ALL", threaded=True)
         def unmute(ctx):
             if ctx.args:
                 self.unmute_user_groups(ctx.sender, ctx.args)
             else:
                 ctx.reply("Usage: /unmute <group1> <group2> ... or ALL")
 
-        @self.command(description="Show bot help")
-        def help(ctx):
-            ctx.reply(self.show_help())
-
-        @self.command(description="Show message log", threaded=True)
+        @self.bot.command(description="Show message log", threaded=True)
         def showlog(ctx):
             try:
                 num_messages = int(ctx.args[0]) if ctx.args else 10
@@ -323,7 +323,7 @@ class JS8CallBot(LXMFBot):
             except (IndexError, ValueError):
                 ctx.reply("Usage: /showlog <number>")
 
-        @self.command(description="Show bot statistics", threaded=True)
+        @self.bot.command(description="Show bot statistics", threaded=True)
         def stats(ctx):
             period = (
                 ctx.args[0] if ctx.args and ctx.args[0] in ["day", "month"] else None
@@ -331,12 +331,12 @@ class JS8CallBot(LXMFBot):
             stats_output = self.show_stats(period)
             ctx.reply(stats_output)
 
-        @self.command(description="Show bot information")
+        @self.bot.command(description="Show bot information")
         def info(ctx):
             info_output = self.show_info()
             ctx.reply(info_output)
 
-        @self.command(description="Show usage statistics", threaded=True)
+        @self.bot.command(description="Show usage statistics", threaded=True)
         def analytics(ctx):
             period = (
                 ctx.args[0] if ctx.args and ctx.args[0] in ["day", "week"] else None
@@ -356,7 +356,7 @@ class JS8CallBot(LXMFBot):
 
         # Run the main LXMFBot loop
         try:
-            super().run()
+            self.bot.run()
         except KeyboardInterrupt:
             self.logger.info("Shutting down JS8Call LXMF bot...")
         finally:
@@ -368,8 +368,8 @@ class JS8CallBot(LXMFBot):
                     self.logger.warning("Error closing JS8Call socket during cleanup")
             # Cleanup base storage if supported
             try:
-                if hasattr(self.storage, "cleanup"):
-                    self.storage.cleanup()
+                if hasattr(self.bot.storage, "cleanup"):
+                    self.bot.storage.cleanup()
             except Exception as e:
                 self.logger.warning("Error cleaning up storage: %s", e)
             # Cleanup SQLite storage if present
@@ -378,11 +378,7 @@ class JS8CallBot(LXMFBot):
                     self.db.cleanup()
             except Exception as e:
                 self.logger.warning("Error cleaning up SQLite storage: %s", e)
-            # Shutdown thread pool
-            try:
-                self.thread_pool.shutdown(wait=False)
-            except Exception as e:
-                self.logger.warning("Error shutting down thread pool: %s", e)
+            # Note: LXMFy now handles thread pool shutdown automatically
 
     def js8call_loop(self):
         while True:
@@ -444,7 +440,7 @@ class JS8CallBot(LXMFBot):
                 parts = data["value"].split(":")
                 if len(parts) < 2:
                     self.logger.warning(
-                        "Invalid directed message format: %s", data["value"]
+                        "Invalid directed message format: %s", data["value"],
                     )
                     return
 
@@ -454,7 +450,7 @@ class JS8CallBot(LXMFBot):
                 # Check for blocked words
                 if any(word.lower() in content.lower() for word in self.blocked_words):
                     self.logger.info(
-                        "Message from %s contains blocked words. Skipping.", sender
+                        "Message from %s contains blocked words. Skipping.", sender,
                     )
                     return
 
@@ -512,30 +508,6 @@ class JS8CallBot(LXMFBot):
         ]
         concurrent.futures.wait(futures)
 
-    def show_help(self):
-        """Return help message with available commands"""
-        cmds = [
-            "/add (admin only) - Add yourself to the JS8Call message group",
-            "/remove (admin only) - Remove yourself from the JS8Call message group",
-            "/groups - Show available groups and your subscriptions",
-            "/join <group1> <group2> ... - Join one or more groups",
-            "/leave <group> - Leave a specific group",
-            "/mute <group1> <group2> ... or ALL - Mute one or more groups or all groups",
-            "/unmute <group1> <group2> ... or ALL - Unmute one or more groups or all groups",
-            "/help - Show this help message",
-            "/showlog <number> - Show the last <number> messages (max 50)",
-            "/stats - Show current stats",
-            "/stats <day|month> - Show stats for the specified period",
-            "/info - Show bot information",
-            "/analytics [day|week] - Show usage statistics",
-        ]
-        help_msg = "Available commands:\n" + "\n".join(cmds)
-        # Append configured JS8Call and urgent groups
-        if self.js8groups:
-            help_msg += "\n\nConfigured JS8Call groups:\n" + ", ".join(self.js8groups)
-        if self.js8urgent:
-            help_msg += "\n\nConfigured URGENT groups:\n" + ", ".join(self.js8urgent)
-        return help_msg
 
     def show_groups(self, user):
         """Show available groups and user's subscriptions"""
@@ -595,7 +567,7 @@ class JS8CallBot(LXMFBot):
         if period == "day":
             date = datetime.now().strftime("%Y-%m-%d")
             stats = self.execute_db_query(
-                "SELECT user_count FROM stats WHERE date = ?", (date,)
+                "SELECT user_count FROM stats WHERE date = ?", (date,),
             )
             if stats:
                 output += f"Users today: {stats[0][0]}\n"
@@ -621,13 +593,13 @@ class JS8CallBot(LXMFBot):
         if period == "day":
             date = datetime.now().strftime("%Y-%m-%d")
             messages_count = self.execute_db_query(
-                "SELECT COUNT(*) FROM messages WHERE DATE(timestamp) = ?", (date,)
+                "SELECT COUNT(*) FROM messages WHERE DATE(timestamp) = ?", (date,),
             )
             groups_count = self.execute_db_query(
-                "SELECT COUNT(*) FROM groups WHERE DATE(timestamp) = ?", (date,)
+                "SELECT COUNT(*) FROM groups WHERE DATE(timestamp) = ?", (date,),
             )
             urgent_count = self.execute_db_query(
-                "SELECT COUNT(*) FROM urgent WHERE DATE(timestamp) = ?", (date,)
+                "SELECT COUNT(*) FROM urgent WHERE DATE(timestamp) = ?", (date,),
             )
             output += f"Messages today: {messages_count[0][0] if messages_count else 0}\n"
             output += f"Group messages today: {groups_count[0][0] if groups_count else 0}\n"
@@ -636,13 +608,13 @@ class JS8CallBot(LXMFBot):
             start_of_week = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%Y-%m-%d")
             end_of_week = (datetime.now() + timedelta(days=(6 - datetime.now().weekday()))).strftime("%Y-%m-%d")
             messages_count = self.execute_db_query(
-                "SELECT COUNT(*) FROM messages WHERE DATE(timestamp) BETWEEN ? AND ?", (start_of_week, end_of_week)
+                "SELECT COUNT(*) FROM messages WHERE DATE(timestamp) BETWEEN ? AND ?", (start_of_week, end_of_week),
             )
             groups_count = self.execute_db_query(
-                "SELECT COUNT(*) FROM groups WHERE DATE(timestamp) BETWEEN ? AND ?", (start_of_week, end_of_week)
+                "SELECT COUNT(*) FROM groups WHERE DATE(timestamp) BETWEEN ? AND ?", (start_of_week, end_of_week),
             )
             urgent_count = self.execute_db_query(
-                "SELECT COUNT(*) FROM urgent WHERE DATE(timestamp) BETWEEN ? AND ?", (start_of_week, end_of_week)
+                "SELECT COUNT(*) FROM urgent WHERE DATE(timestamp) BETWEEN ? AND ?", (start_of_week, end_of_week),
             )
             output += f"Messages this week: {messages_count[0][0] if messages_count else 0}\n"
             output += f"Group messages this week: {groups_count[0][0] if groups_count else 0}\n"
