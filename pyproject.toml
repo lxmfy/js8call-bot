@@ -10,7 +10,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
-lxmfy = "^1.0.0"
+lxmfy = "^1.0.1"
 
 [tool.poetry.scripts]
 lxmfy-js8call-bot = "lxmfy_js8call_bot.bot:main"

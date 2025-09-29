@@ -192,14 +192,14 @@ rns = ">=1.0.0"
 
 [[package]]
 name = "lxmfy"
-version = "1.0.0"
+version = "1.0.1"
 description = "LXMF bot framework for creating bots for the Reticulum Network"
 optional = false
 python-versions = ">=3.11"
 groups = ["main"]
 files = [
-    {file = "lxmfy-1.0.0-py3-none-any.whl", hash = "sha256:eebcad65f9b687ec5e9c7092de31ae8e7ae7d3d67ec467ebe58b9b9d07487b56"},
-    {file = "lxmfy-1.0.0.tar.gz", hash = "sha256:d4f9a3f6f2514771724f7607b2395c267b318db13a76dc3b698fe9c2027517f0"},
+    {file = "lxmfy-1.0.1-py3-none-any.whl", hash = "sha256:150e7f772b3eb7f737c5dc06b6ecca61fa2d7c127c287af72a967832c234139e"},
+    {file = "lxmfy-1.0.1.tar.gz", hash = "sha256:9de2e4dfac89dfc3560b2bef73f0edac4907f1ad49835eaea07022b6fb85bf86"},
 ]
 
 [package.dependencies]
@@ -282,4 +282,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "b540412551005ca8d565a32dd88e0fc943fded372a1d2117add6cf950b9a4ee7"
+content-hash = "c62a0a2398dbad3b10a5ff994aee3a61231ec5997a04a187428a143dc37d3a08"
