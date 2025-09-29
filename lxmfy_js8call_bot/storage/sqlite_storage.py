@@ -18,6 +18,7 @@ class SQLiteStorage(StorageBackend):
 
         Args:
             db_file: Path to the SQLite database file
+
         """
         self.db_file = db_file
         self.db_lock = threading.Lock()
@@ -79,7 +80,7 @@ class SQLiteStorage(StorageBackend):
                     date TEXT UNIQUE,
                     user_count INTEGER
                 );
-            """
+            """,
             )
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -91,6 +92,7 @@ class SQLiteStorage(StorageBackend):
 
         Returns:
             The stored value or default if not found
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
@@ -120,6 +122,7 @@ class SQLiteStorage(StorageBackend):
         Args:
             key: The key to store
             value: The value to store
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
@@ -140,6 +143,7 @@ class SQLiteStorage(StorageBackend):
 
         Args:
             key: The key to delete
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
@@ -160,6 +164,7 @@ class SQLiteStorage(StorageBackend):
 
         Returns:
             True if key exists, False otherwise
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
@@ -177,12 +182,13 @@ class SQLiteStorage(StorageBackend):
 
         Returns:
             List of matching keys
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
             try:
                 cursor.execute(
-                    "SELECT key FROM storage WHERE key LIKE ?", (f"{prefix}%",)
+                    "SELECT key FROM storage WHERE key LIKE ?", (f"{prefix}%",),
                 )
                 return [row[0] for row in cursor.fetchall()]
             finally:
@@ -195,6 +201,7 @@ class SQLiteStorage(StorageBackend):
             sender: Message sender
             receiver: Message receiver
             message: Message content
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
@@ -212,6 +219,7 @@ class SQLiteStorage(StorageBackend):
 
         Returns:
             List of unprocessed messages
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
@@ -226,12 +234,13 @@ class SQLiteStorage(StorageBackend):
 
         Args:
             message_id: ID of the message to mark
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
             try:
                 cursor.execute(
-                    "UPDATE messages SET processed = 1 WHERE id = ?", (message_id,)
+                    "UPDATE messages SET processed = 1 WHERE id = ?", (message_id,),
                 )
                 self.db_conn.commit()
             finally:
@@ -247,6 +256,7 @@ class SQLiteStorage(StorageBackend):
 
         Returns:
             List of user records
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
@@ -263,6 +273,7 @@ class SQLiteStorage(StorageBackend):
             user_hash: User's unique hash
             groups: User's subscribed groups
             muted_groups: User's muted groups
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
@@ -283,6 +294,7 @@ class SQLiteStorage(StorageBackend):
 
         Args:
             user_hash: Hash of the user to remove
+
         """
         with self.db_lock:
             cursor = self.db_conn.cursor()
